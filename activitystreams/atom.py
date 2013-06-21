@@ -1,6 +1,6 @@
+import logging
 
-
-from activitystreams import Activity, Object, MediaLink, ActionLink, Link
+from activitystreams import Activity, Object, MediaLink, ActionLink, Link, NoteObject, PostActivity
 
 
 import re
@@ -9,7 +9,11 @@ import time
 
 
 class AtomActivity(Activity):
-    pass
+
+    def __new__(self, *args, **kwargs):
+        if kwargs['verb'] == POST_VERB:
+            return PostActivity(*args, **kwargs)
+        return Activity.__new__(self, *args, **kwargs)
 
 
 # This is a weird enum-like thing.
@@ -53,6 +57,8 @@ MEDIA_WIDTH = MEDIA_PREFIX + "width"
 MEDIA_HEIGHT = MEDIA_PREFIX + "height"
 MEDIA_DURATION = MEDIA_PREFIX + "duration"
 MEDIA_DESCRIPTION = MEDIA_PREFIX + "description"
+PERSON_OBJECT = "http://activitystrea.ms/schema/1.0/person"
+NOTE_OBJECT = "http://activitystrea.ms/schema/1.0/note"
 
 
 def make_activities_from_feed(et):
@@ -122,7 +128,7 @@ def make_activities_from_entry(entry_elem, feed_elem):
         else:
             object = make_object_from_elem(object_elem, feed_elem, ObjectParseMode.ACTIVITY_OBJECT)
 
-        activity = Activity(object=object, actor=actor, target=target, verb=verb, time=published_datetime, icon_url=icon_url)
+        activity = AtomActivity(object = object, actor = actor, target = target, verb = verb, time = published_datetime, icon_url = icon_url)
         activities.append(activity)
 
     return activities
@@ -139,6 +145,15 @@ def make_object_from_elem(object_elem, feed_elem, mode):
     summary_elem = object_elem.find(ATOM_SUMMARY)
     if summary_elem is not None:
         summary = summary_elem.text
+
+    content = None
+    content_elem = object_elem.find(ATOM_CONTENT)
+    if content_elem is not None:
+        # may be interpre this later
+        if content_elem.attrib['type'] == 'html':
+            content = content_elem.text
+        else:
+            logging.warn('unexpected activity object type %s' % content_elem.attrib['type'])
 
     name_tag_name = ATOM_TITLE
     # The ATOM_AUTHOR parsing mode looks in atom:name instead of atom:title
@@ -160,7 +175,7 @@ def make_object_from_elem(object_elem, feed_elem, mode):
         if rel == "preview":
             if type is None or type == "image/jpeg" or type == "image/gif" or type == "image/png":
                 # FIXME: Should pull out the width/height/duration attributes from AtomMedia too.
-                image = MediaLink(url=link_elem.get("href"))
+                image = MediaLink(url = link_elem.get("href"))
 
     # In the atom:author parse mode we fall back on atom:uri if there's no link rel="alternate"
     if url is None and mode == ObjectParseMode.ATOM_AUTHOR:
@@ -173,7 +188,20 @@ def make_object_from_elem(object_elem, feed_elem, mode):
     if object_type_elem is not None:
         object_type = object_type_elem.text
 
-    return Object(id=id, name=name, url=url, object_type=object_type, image=image, summary=summary)
+    object_params = {
+        'id': id,
+        'name': name,
+        'url': url,
+        'object_type': object_type,
+        'image': image,
+        'summary': summary
+    }
+
+    if object_type == PERSON_OBJECT:
+        pass
+    elif object_type == NOTE_OBJECT:
+        return NoteObject(content = content, **object_params)
+    return Object(**object_params)
 
 
 # This is pilfered from Universal Feed Parser.
@@ -249,7 +277,7 @@ def _parse_date_w3cdtf(dateString):
             minutes = int(minutes)
         else:
             minutes = 0
-        offset = (hours*60 + minutes) * 60
+        offset = (hours * 60 + minutes) * 60
         if tzd[0] == '+':
             return -offset
         return offset
