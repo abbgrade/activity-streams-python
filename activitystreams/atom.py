@@ -118,7 +118,7 @@ def make_activities_from_entry(entry_elem, feed_elem):
         target = make_object_from_elem(target_elem, feed_elem, ObjectParseMode.ACTIVITY_OBJECT)
 
     actor = None
-    if author_elem:
+    if author_elem is not None:
         actor = make_object_from_elem(author_elem, feed_elem, ObjectParseMode.ATOM_AUTHOR)
 
     activities = []
