@@ -6,6 +6,7 @@ from activitystreams import Activity, Object, MediaLink, ActionLink, Link, NoteO
 import re
 import datetime
 import time
+from HTMLParser import HTMLParser
 
 
 class AtomActivity(Activity):
@@ -74,6 +75,7 @@ def make_activities_from_feed(et):
 
 
 def make_activities_from_entry(entry_elem, feed_elem):
+
     object_elems = entry_elem.findall(ACTIVITY_OBJECT)
 
     activity_is_implied = False
@@ -151,7 +153,11 @@ def make_object_from_elem(object_elem, feed_elem, mode):
     if content_elem is not None:
         # may be interpre this later
         if content_elem.attrib['type'] == 'html':
-            content = content_elem.text
+
+            # ugly fix
+            content = HTMLParser().unescape(content_elem.text)
+
+            #content = content_elem.text
         else:
             logging.warn('unexpected activity object type %s' % content_elem.attrib['type'])
 
@@ -194,13 +200,14 @@ def make_object_from_elem(object_elem, feed_elem, mode):
         'url': url,
         'object_type': object_type,
         'image': image,
-        'summary': summary
+        'summary': summary,
+        'content': content
     }
 
     if object_type == PERSON_OBJECT:
         pass
     elif object_type == NOTE_OBJECT:
-        return NoteObject(content = content, **object_params)
+        return NoteObject(**object_params)#content = content,
     return Object(**object_params)
 
 
